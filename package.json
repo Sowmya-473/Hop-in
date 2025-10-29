@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "@types/leaflet": "^1.9.20"
+  },
+  "dependencies": {
+    "luxon": "^3.7.2"
   }
 }

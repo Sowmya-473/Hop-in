@@ -87,21 +87,29 @@ export function FindRidesTab({ onDriverSelect }: FindRidesTabProps) {
       setOriginCoords(origin);
       setDestCoords(destination);
 
-      // 🗺️ Route drawing
+      // 🗺️ Route drawing — safe geometry decoding
       const routeRes = await fetch(
-        `${import.meta.env.VITE_API_BASE}/route?originLat=${origin.lat}&originLng=${origin.lng}&destLat=${destination.lat}&destLng=${destination.lng}`
+        `http://localhost:5004/api/route?originLat=${origin.lat}&originLng=${origin.lng}&destLat=${destination.lat}&destLng=${destination.lng}`
       );
-      const routeData = await routeRes.json();
 
-      if (routeData.geometry) {
-        const coords = routeData.geometry.coordinates.map(
-          (c: [number, number]) => ({ lat: c[1], lng: c[0] })
-        );
-        setRouteLine(coords);
-        setRouteInfo({
-          distance: routeData.distance_km,
-          duration: routeData.duration_min,
-        });
+      if (!routeRes.ok) {
+        console.warn("⚠️ Route API failed:", routeRes.status);
+      } else {
+        const routeData = await routeRes.json();
+
+        // ✅ Safe geometry decoding
+        if (routeData?.polyline && window.google?.maps?.geometry?.encoding) {
+          const path = window.google.maps.geometry.encoding.decodePath(routeData.polyline);
+          const coords = path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
+          setRouteLine(coords);
+          setRouteInfo({
+            distance: routeData.distance_km,
+            duration: routeData.duration_min,
+          });
+        } else {
+          console.warn("⚠️ Geometry not loaded or missing polyline, using fallback.");
+          setRouteLine([]);
+        }
       }
 
       // 🧩 Get current user ID for filtering
@@ -276,7 +284,7 @@ export function FindRidesTab({ onDriverSelect }: FindRidesTabProps) {
             <Card key={d._id} onClick={() => onDriverSelect?.(d)} className="cursor-pointer hover:shadow-md transition">
               <CardContent className="p-4 flex justify-between">
                 <div>
-                  <h3 className="font-medium">{d.driver_name}</h3>
+                  <h3 className="font-medium">{d.driver_name || d.userId?.name || "Unknown Driver"}</h3>
                   <p className="text-sm text-muted-foreground">
                     {shortenAddress(d.startLocation)} → {shortenAddress(d.destinationName)}
                   </p>

@@ -1,4 +1,3 @@
-// src/components/OfferRideTab.tsx
 import { useState, useEffect, useRef } from "react";
 import {
   MapPin,
@@ -21,8 +20,6 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
-// import { Switch } from "./ui/switch";
-// import { Label } from "./ui/label";
 import { getToken } from "../lib/api";
 
 interface OfferRideTabProps {
@@ -30,34 +27,29 @@ interface OfferRideTabProps {
 }
 
 export function OfferRideTab({}: OfferRideTabProps) {
-  // Form state
   const [startLocation, setStartLocation] = useState("");
   const [destinationName, setDestinationName] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [seats, setSeats] = useState("3");
 
-  // Map/route state
   const [suggestedPrice, setSuggestedPrice] = useState<number | null>(null);
   const [startCoords, setStartCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [directions, setDirections] = useState<any>(null);
 
-  // Driver dashboard state
   const [myRides, setMyRides] = useState<any[]>([]);
   const [expandedRide, setExpandedRide] = useState<string | null>(null);
 
-  // Refs
   const startAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const destAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const defaultCenter = { lat: 13.0827, lng: 80.2707 }; // Chennai
   const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5004/api";
 
-  // Calculate route + price (simple heuristic)
+  // ─── Route & Price ───────────────────────────────
   const calculateRouteAndPrice = () => {
     if (!startCoords || !destCoords) return;
-
     const service = new google.maps.DirectionsService();
     service.route(
       {
@@ -84,7 +76,7 @@ export function OfferRideTab({}: OfferRideTabProps) {
     calculateRouteAndPrice();
   }, [startCoords, destCoords]);
 
-  // Publish a new ride
+  // ─── Publish Ride ───────────────────────────────
   const handlePublishRide = async () => {
     if (!startLocation || !destinationName || !startCoords || !destCoords || !date || !time) {
       alert("Please fill all details!");
@@ -114,14 +106,13 @@ export function OfferRideTab({}: OfferRideTabProps) {
           date,
           time,
           seats: Number(seats),
-          price: suggestedPrice, // exact price, no fallback
+          price: suggestedPrice,
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to publish ride");
-      }
-      // reset form
+      if (!res.ok) throw new Error(data?.error || "Failed to publish ride");
+
+      // Reset form
       setStartLocation("");
       setDestinationName("");
       setDate("");
@@ -132,7 +123,7 @@ export function OfferRideTab({}: OfferRideTabProps) {
       setDestCoords(null);
       setDirections(null);
 
-      fetchMyRides(); // refresh list
+      fetchMyRides();
       alert("Ride published successfully!");
     } catch (err: any) {
       console.error("❌ Publish ride error:", err);
@@ -140,7 +131,7 @@ export function OfferRideTab({}: OfferRideTabProps) {
     }
   };
 
-  // Fetch driver’s active rides
+  // ─── Fetch Active Rides ───────────────────────────────
   const fetchMyRides = async () => {
     try {
       const token = getToken();
@@ -148,10 +139,7 @@ export function OfferRideTab({}: OfferRideTabProps) {
       const res = await fetch(`${API_BASE}/rides/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to fetch my rides");
-      }
+      if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setMyRides(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -163,30 +151,37 @@ export function OfferRideTab({}: OfferRideTabProps) {
     fetchMyRides();
   }, []);
 
-  // Respond to passenger request
-  const respondToRequest = async (rideId: string, userId: string, action: "accept" | "decline") => {
+  // ─── Respond to Ride Request ───────────────────────────────
+  const respondToRequest = async (rideId: string, requestId: string, action: string) => {
     try {
-      const token = getToken();
-      if (!token) return;
       const res = await fetch(`${API_BASE}/rides/${rideId}/respond`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         },
-        body: JSON.stringify({ userId, action }),
+        body: JSON.stringify({ requestId, action }),
       });
+
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to update request");
+        const err = await res.json().catch(() => ({}));
+        throw new Error(JSON.stringify(err));
       }
+
+      const data = await res.json();
+      console.log("✅ Ride response success:", data);
+      alert(`Ride request ${action}ed successfully`);
+
+      // ✅ Immediately refresh driver’s rides
       fetchMyRides();
     } catch (err) {
       console.error("❌ Ride response error:", err);
+      alert("Could not update request. Try again.");
     }
   };
 
-  // Cancel ride
+
+  // ─── Cancel / End Ride ───────────────────────────────
   const cancelRide = async (rideId: string) => {
     try {
       const token = getToken();
@@ -196,17 +191,13 @@ export function OfferRideTab({}: OfferRideTabProps) {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to cancel ride");
-      }
+      if (!res.ok) throw new Error(await res.text());
       fetchMyRides();
     } catch (err) {
       console.error("❌ Cancel ride error:", err);
     }
   };
 
-  // End ride (mark as ended)
   const endRide = async (rideId: string) => {
     try {
       const token = getToken();
@@ -217,9 +208,7 @@ export function OfferRideTab({}: OfferRideTabProps) {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to end ride");
-      }
+      if (!res.ok) throw new Error(data?.error || "Failed to end ride");
       fetchMyRides();
       alert("Ride ended successfully!");
     } catch (err) {
@@ -227,16 +216,25 @@ export function OfferRideTab({}: OfferRideTabProps) {
     }
   };
 
+  const formatIST = (utcDateString: string) => {
+    return new Date(utcDateString).toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  // ─── JSX ───────────────────────────────
   return (
     <div className="p-4 space-y-6">
-      {/* Heading */}
       <h1 className="text-2xl font-semibold mb-2">Offer a Ride</h1>
 
       {/* Google Map */}
-      <div
-        className="rounded-lg overflow-hidden border border-gray-200"
-        style={{ height: "400px" }}
-      >
+      <div className="rounded-lg overflow-hidden border border-gray-200" style={{ height: "400px" }}>
         <GoogleMap
           mapContainerStyle={{ height: "100%", width: "100%" }}
           center={startCoords || defaultCenter}
@@ -322,14 +320,12 @@ export function OfferRideTab({}: OfferRideTabProps) {
             </select>
           </div>
 
-          {/* Suggested price */}
           {suggestedPrice !== null && (
             <div className="text-sm bg-accent/40 p-2 rounded-md">
               ₹{suggestedPrice} per seat (auto-calculated)
             </div>
           )}
 
-          {/* Publish */}
           <Button className="w-full" onClick={handlePublishRide}>
             Publish Ride
           </Button>
@@ -345,7 +341,6 @@ export function OfferRideTab({}: OfferRideTabProps) {
             return (
               <Card key={ride._id} className="mb-3">
                 <CardContent className="p-4">
-                  {/* Header row (collapsible) */}
                   <div
                     className="flex justify-between items-center cursor-pointer"
                     onClick={() => setExpandedRide(isOpen ? null : ride._id)}
@@ -355,74 +350,70 @@ export function OfferRideTab({}: OfferRideTabProps) {
                         {ride.startLocation} → {ride.destinationName}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(ride.when).toLocaleString()} • {ride.seats} seats • ₹{ride.price} per seat
+                        {formatIST(ride.when)} • {ride.seats} seats • ₹{ride.price} per seat
                       </p>
                     </div>
                     {isOpen ? <ChevronUp /> : <ChevronDown />}
                   </div>
 
-                  {/* Expanded content */}
                   {isOpen && (
                     <div className="mt-4 space-y-3 border-t pt-3">
                       <p className="font-medium text-sm">
-                        Passengers ({ride.bookings?.length || 0})
+                        Requests ({ride.requests?.length || 0})
                       </p>
 
-                      {ride.bookings?.length ? (
-                        ride.bookings.map((b: any) => (
+                      {ride.requests?.length ? (
+                        ride.requests.map((r: any) => (
                           <div
-                            key={b._id}
+                            key={r._id}
                             className="flex justify-between items-center bg-accent/30 rounded-md p-2"
                           >
                             <div>
-                              <p className="font-semibold text-sm">{b.user?.name || "Rider"}</p>
-                              <p className="text-xs text-muted-foreground">{b.user?.phone || ""}</p>
+                              <p className="font-semibold text-sm">{r.user?.name || "Rider"}</p>
+                              <p className="text-xs text-muted-foreground">{r.user?.phone || ""}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              {/* Call / Message */}
-                              {b.user?.phone && (
+                              {r.user?.phone && (
                                 <>
                                   <Phone
                                     className="cursor-pointer text-gray-600"
-                                    onClick={() => window.open(`tel:${b.user.phone}`, "_self")}
+                                    onClick={() => window.open(`tel:${r.user.phone}`, "_self")}
                                   />
                                   <MessageSquare
                                     className="cursor-pointer text-gray-600"
-                                    onClick={() => window.open(`sms:${b.user.phone}`, "_self")}
+                                    onClick={() => window.open(`sms:${r.user.phone}`, "_self")}
                                   />
                                 </>
                               )}
 
-                              {/* Status chip */}
                               <span
                                 className={`text-xs px-2 py-1 rounded ${
-                                  b.status === "accepted"
+                                  r.status === "accepted"
                                     ? "bg-green-100 text-green-800"
-                                    : b.status === "pending"
+                                    : r.status === "pending"
                                     ? "bg-yellow-100 text-yellow-800"
                                     : "bg-red-100 text-red-800"
                                 }`}
                               >
-                                {b.status || "pending"}
+                                {r.status || "pending"}
                               </span>
 
-                              {/* Accept / Decline */}
-                              {b.status !== "accepted" && (
+                              {r.status !== "accepted" && (
                                 <Button
                                   size="sm"
                                   variant="secondary"
                                   className="h-7 px-2"
-                                  onClick={() => respondToRequest(ride._id, b.user._id, "accept")}
+                                  onClick={() => respondToRequest(ride._id, r._id, "accepted")}
                                 >
                                   <Check className="w-4 h-4" />
                                 </Button>
                               )}
-                              {b.status !== "declined" && (
+                              {r.status !== "rejected" && (
                                 <Button
                                   size="sm"
                                   variant="destructive"
                                   className="h-7 px-2"
-                                  onClick={() => respondToRequest(ride._id, b.user._id, "decline")}
+                                  onClick={() => respondToRequest(ride._id, r._id, "rejected")}
                                 >
                                   <X className="w-4 h-4" />
                                 </Button>
@@ -434,7 +425,6 @@ export function OfferRideTab({}: OfferRideTabProps) {
                         <p className="text-sm text-muted-foreground">No requests yet.</p>
                       )}
 
-                      {/* End / Cancel */}
                       <div className="flex gap-2 pt-3 border-t">
                         <Button
                           variant="secondary"

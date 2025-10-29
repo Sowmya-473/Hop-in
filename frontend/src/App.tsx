@@ -13,7 +13,8 @@ import { LoginPage } from "./components/LoginPage";
 import { SignupPage } from "./components/SignupPage";
 import { LoadScript } from "@react-google-maps/api";
 
-const libraries: ("places")[] = ["places"];
+// ✅ FIX: Added "geometry" to libraries
+const libraries: ("places" | "geometry")[] = ["places", "geometry"];
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -84,6 +85,7 @@ export default function App() {
   const navigateToSignup = () => setAuthView("signup");
   const navigateToLogin = () => setAuthView("login");
 
+  // 🔐 Authentication handling
   if (!isAuthenticated) {
     return authView === "signup" ? (
       <SignupPage onSignup={handleSignup} onNavigateToLogin={navigateToLogin} />
@@ -93,11 +95,13 @@ export default function App() {
   }
 
   return (
+    // ✅ FIX: Geometry library included
     <LoadScript
       googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string}
       libraries={libraries}
     >
       <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
+        {/* Header */}
         <TopHeader
           onMenuToggle={() => setIsMenuOpen(!isMenuOpen)}
           onNotificationsToggle={() =>
@@ -105,6 +109,7 @@ export default function App() {
           }
         />
 
+        {/* Active Tab */}
         <div className="flex-1 pb-20 pt-16">
           <ActiveComponent
             onDriverSelect={openDriverDetails}
@@ -115,6 +120,7 @@ export default function App() {
           />
         </div>
 
+        {/* Bottom Tab Bar */}
         <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md bg-white border-t border-border shadow-lg">
           <div className="flex">
             {tabs.map((tab) => {
@@ -140,6 +146,7 @@ export default function App() {
           </div>
         </div>
 
+        {/* Side Panels and Modals */}
         <HamburgerMenu
           isOpen={isMenuOpen}
           onClose={() => setIsMenuOpen(false)}
